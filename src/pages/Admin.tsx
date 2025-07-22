@@ -84,6 +84,8 @@ const Admin = () => {
     played: false
   });
 
+  const [matchSearchTerm, setMatchSearchTerm] = useState('');
+
   useEffect(() => {
     if (user) {
       fetchData();
@@ -181,6 +183,19 @@ const Admin = () => {
     
     return filtered;
   };
+
+  const filteredMatches = matches.filter(match => {
+    if (!matchSearchTerm.trim()) return true;
+    
+    const searchLower = matchSearchTerm.toLowerCase();
+    const homeTeamName = match.home_team_data?.name?.toLowerCase() || '';
+    const awayTeamName = match.away_team_data?.name?.toLowerCase() || '';
+    const matchDate = new Date(match.date).toLocaleDateString().toLowerCase();
+    
+    return homeTeamName.includes(searchLower) ||
+           awayTeamName.includes(searchLower) ||
+           matchDate.includes(searchLower);
+  });
 
   // CRUD operations
   const addTeam = async (e: React.FormEvent) => {
@@ -728,6 +743,28 @@ const Admin = () => {
             </button>
           </div>
 
+          {/* Search Bar */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-4 border border-white/20">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder={language === 'ar' ? 'البحث في المباريات (الفرق، التاريخ...)' : 'Rechercher dans les matchs (équipes, date...)'}
+                value={matchSearchTerm}
+                onChange={(e) => setMatchSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white/50 backdrop-blur-sm"
+              />
+            </div>
+            
+            {/* Results Counter */}
+            <div className="mt-3 text-sm text-gray-600">
+              {language === 'ar' 
+                ? `عرض ${filteredMatches.length} من ${matches.length} مباراة`
+                : `Affichage de ${filteredMatches.length} sur ${matches.length} matchs`
+              }
+            </div>
+          </div>
+
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -750,7 +787,13 @@ const Admin = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {matches.map((match) => (
+                {filteredMatches.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
+                      {language === 'ar' ? 'لا توجد مباريات تطابق البحث' : 'Aucun match ne correspond à la recherche'}
+                    </td>
+                  </tr>
+                ) : filteredMatches.map((match) => (
                   <tr key={match.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(match.date).toLocaleDateString()} - {match.time}
