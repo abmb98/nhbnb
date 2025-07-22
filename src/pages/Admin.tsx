@@ -40,6 +40,7 @@ const Admin = () => {
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+  const [editingTeamStats, setEditingTeamStats] = useState<Team | null>(null);
   
   // Search and filter states
   const [teamSearch, setTeamSearch] = useState('');
@@ -85,6 +86,14 @@ const Admin = () => {
   });
 
   const [matchSearchTerm, setMatchSearchTerm] = useState('');
+
+  const [teamStatsForm, setTeamStatsForm] = useState({
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    goals_for: 0,
+    goals_against: 0
+  });
 
   useEffect(() => {
     if (user) {
@@ -446,6 +455,42 @@ const Admin = () => {
     }
   };
 
+  const openEditTeamStats = (team: Team) => {
+    setEditingTeamStats(team);
+    setTeamStatsForm({
+      wins: team.wins,
+      draws: team.draws,
+      losses: team.losses,
+      goals_for: team.goals_for,
+      goals_against: team.goals_against
+    });
+  };
+
+  const updateTeamStats = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeamStats) return;
+
+    try {
+      const { error } = await supabase
+        .from('teams')
+        .update({
+          wins: teamStatsForm.wins,
+          draws: teamStatsForm.draws,
+          losses: teamStatsForm.losses,
+          goals_for: teamStatsForm.goals_for,
+          goals_against: teamStatsForm.goals_against
+        })
+        .eq('id', editingTeamStats.id);
+
+      if (error) throw error;
+
+      setEditingTeamStats(null);
+      fetchData();
+    } catch (error) {
+      console.error('Error updating team stats:', error);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
   };
@@ -567,6 +612,13 @@ const Admin = () => {
                     className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors"
                   >
                     <Edit className="h-4 w-4 mx-auto" />
+                  </button>
+                  <button
+                    onClick={() => openEditTeamStats(team)}
+                    className="flex-1 bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 transition-colors"
+                    title={language === 'ar' ? 'تعديل الإحصائيات' : 'Modifier les statistiques'}
+                  >
+                    <Target className="h-4 w-4 mx-auto" />
                   </button>
                   <button
                     onClick={() => deleteTeam(team.id)}
@@ -906,6 +958,161 @@ const Admin = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Team Stats Modal */}
+      {editingTeamStats && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">
+              {language === 'ar' ? 'تعديل إحصائيات الفريق' : 'Modifier les statistiques de l\'équipe'}
+            </h3>
+            <div className="mb-4 text-center">
+              <div className="flex items-center justify-center space-x-3 mb-2">
+                {editingTeamStats.logo_url ? (
+                  <img 
+                    src={editingTeamStats.logo_url} 
+                    alt="" 
+                    className="h-12 w-12 rounded-full"
+                  />
+                ) : (
+                  <DefaultAvatar type="team" name={editingTeamStats.name} size="lg" />
+                )}
+                <h4 className="text-xl font-bold text-gray-900">{editingTeamStats.name}</h4>
+              </div>
+              <p className="text-sm text-gray-600">
+                {language === 'ar' ? `المجموعة ${editingTeamStats.group_name}` : `Groupe ${editingTeamStats.group_name}`}
+              </p>
+            </div>
+            
+            <form onSubmit={updateTeamStats}>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {language === 'ar' ? 'الانتصارات' : 'Victoires'}
+                  </label>
+                  <input
+                    type="number"
+                    value={teamStatsForm.wins}
+                    onChange={(e) => setTeamStatsForm({...teamStatsForm, wins: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {language === 'ar' ? 'التعادل' : 'Nuls'}
+                  </label>
+                  <input
+                    type="number"
+                    value={teamStatsForm.draws}
+                    onChange={(e) => setTeamStatsForm({...teamStatsForm, draws: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {language === 'ar' ? 'الهزائم' : 'Défaites'}
+                  </label>
+                  <input
+                    type="number"
+                    value={teamStatsForm.losses}
+                    onChange={(e) => setTeamStatsForm({...teamStatsForm, losses: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {language === 'ar' ? 'الأهداف المسجلة' : 'Buts marqués'}
+                  </label>
+                  <input
+                    type="number"
+                    value={teamStatsForm.goals_for}
+                    onChange={(e) => setTeamStatsForm({...teamStatsForm, goals_for: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                    required
+                  />
+                </div>
+                
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {language === 'ar' ? 'الأهداف المستقبلة' : 'Buts encaissés'}
+                  </label>
+                  <input
+                    type="number"
+                    value={teamStatsForm.goals_against}
+                    onChange={(e) => setTeamStatsForm({...teamStatsForm, goals_against: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                    required
+                  />
+                </div>
+              </div>
+              
+              {/* Stats Preview */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h5 className="text-sm font-medium text-gray-700 mb-2">
+                  {language === 'ar' ? 'معاينة الإحصائيات' : 'Aperçu des statistiques'}
+                </h5>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-emerald-600">
+                      {teamStatsForm.wins * 3 + teamStatsForm.draws}
+                    </div>
+                    <div className="text-gray-600">
+                      {language === 'ar' ? 'النقاط' : 'Points'}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-lg text-blue-600">
+                      {teamStatsForm.wins + teamStatsForm.draws + teamStatsForm.losses}
+                    </div>
+                    <div className="text-gray-600">
+                      {language === 'ar' ? 'المباريات' : 'Matchs'}
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`font-bold text-lg ${
+                      (teamStatsForm.goals_for - teamStatsForm.goals_against) >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {teamStatsForm.goals_for - teamStatsForm.goals_against > 0 ? '+' : ''}
+                      {teamStatsForm.goals_for - teamStatsForm.goals_against}
+                    </div>
+                    <div className="text-gray-600">
+                      {language === 'ar' ? 'فارق الأهداف' : 'Diff. buts'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTeamStats(null)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Annuler'}
+                </button>
+                <button
+                  type="submit"
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors flex items-center space-x-2"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{language === 'ar' ? 'حفظ' : 'Enregistrer'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
