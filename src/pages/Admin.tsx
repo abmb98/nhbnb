@@ -39,6 +39,7 @@ const Admin = () => {
   const [showAddElimination, setShowAddElimination] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   
   // Search and filter states
   const [teamSearch, setTeamSearch] = useState('');
@@ -75,6 +76,12 @@ const Admin = () => {
     team2_id: '',
     date: '',
     time: '15:00'
+  });
+
+  const [matchEditForm, setMatchEditForm] = useState({
+    home_score: 0,
+    away_score: 0,
+    played: false
   });
 
   useEffect(() => {
@@ -296,6 +303,107 @@ const Admin = () => {
       fetchData();
     } catch (error) {
       console.error('Error adding match:', error);
+    }
+  };
+
+  const updateMatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMatch) return;
+    
+    try {
+      const { error } = await supabase
+        .from('matches')
+        .update({
+          home_score: matchEditForm.home_score,
+          away_score: matchEditForm.away_score,
+          played: matchEditForm.played,
+          status: matchEditForm.played ? 'finished' : 'scheduled'
+        })
+        .eq('id', editingMatch.id);
+      
+      if (error) throw error;
+      
+      // If marking as played, update team statistics
+      if (matchEditForm.played && !editingMatch.played) {
+        await updateTeamStatsFromMatch(editingMatch.home_team, editingMatch.away_team, matchEditForm.home_score, matchEditForm.away_score);
+      }
+      
+      setEditingMatch(null);
+      setMatchEditForm({ home_score: 0, away_score: 0, played: false });
+      fetchData();
+    } catch (error) {
+      console.error('Error updating match:', error);
+    }
+  };
+
+  const updateTeamStatsFromMatch = async (homeTeamId: string, awayTeamId: string, homeScore: number, awayScore: number) => {
+    try {
+      // Fetch current team stats
+      const { data: homeTeam } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('id', homeTeamId)
+        .single();
+        
+      const { data: awayTeam } = await supabase
+        .from('teams')
+        .select('*')
+        .eq('id', awayTeamId)
+        .single();
+
+      if (!homeTeam || !awayTeam) return;
+
+      // Calculate new stats based on result
+      let homeWins = homeTeam.wins;
+      let homeDraws = homeTeam.draws;
+      let homeLosses = homeTeam.losses;
+      let awayWins = awayTeam.wins;
+      let awayDraws = awayTeam.draws;
+      let awayLosses = awayTeam.losses;
+
+      if (homeScore > awayScore) {
+        homeWins++;
+        awayLosses++;
+      } else if (awayScore > homeScore) {
+        awayWins++;
+        homeLosses++;
+      } else {
+        homeDraws++;
+        awayDraws++;
+      }
+
+      // Update goals
+      const homeGoalsFor = homeTeam.goals_for + homeScore;
+      const homeGoalsAgainst = homeTeam.goals_against + awayScore;
+      const awayGoalsFor = awayTeam.goals_for + awayScore;
+      const awayGoalsAgainst = awayTeam.goals_against + homeScore;
+
+      // Update home team
+      await supabase
+        .from('teams')
+        .update({
+          wins: homeWins,
+          draws: homeDraws,
+          losses: homeLosses,
+          goals_for: homeGoalsFor,
+          goals_against: homeGoalsAgainst
+        })
+        .eq('id', homeTeamId);
+
+      // Update away team
+      await supabase
+        .from('teams')
+        .update({
+          wins: awayWins,
+          draws: awayDraws,
+          losses: awayLosses,
+          goals_for: awayGoalsFor,
+          goals_against: awayGoalsAgainst
+        })
+        .eq('id', awayTeamId);
+
+    } catch (error) {
+      console.error('Error updating team stats:', error);
     }
   };
 
@@ -636,6 +744,9 @@ const Admin = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {language === 'ar' ? 'الحالة' : 'Statut'}
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {language === 'ar' ? 'الإجراءات' : 'Actions'}
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -662,6 +773,21 @@ const Admin = () => {
                         {match.status === 'finished' && (language === 'ar' ? 'انتهت' : 'Terminé')}
                         {match.status === 'scheduled' && (language === 'ar' ? 'مجدولة' : 'Programmé')}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => {
+                          setEditingMatch(match);
+                          setMatchEditForm({
+                            home_score: match.home_score || 0,
+                            away_score: match.away_score || 0,
+                            played: match.played
+                          });
+                        }}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1141,6 +1267,90 @@ const Admin = () => {
                       date: '',
                       time: '15:00'
                     });
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Annuler'}
+                </button>
+                <button
+                  type="submit"
+                  className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors flex items-center space-x-2"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{language === 'ar' ? 'حفظ' : 'Enregistrer'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Match Modal */}
+      {editingMatch && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">
+              {language === 'ar' ? 'تعديل نتيجة المباراة' : 'Modifier le résultat du match'}
+            </h3>
+            
+            {/* Match Info */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-600 mb-2">
+                {new Date(editingMatch.date).toLocaleDateString()} - {editingMatch.time}
+              </div>
+              <div className="font-medium">
+                {editingMatch.home_team_data?.name} vs {editingMatch.away_team_data?.name}
+              </div>
+            </div>
+
+            <form onSubmit={updateMatch}>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {editingMatch.home_team_data?.name}
+                  </label>
+                  <input
+                    type="number"
+                    value={matchEditForm.home_score}
+                    onChange={(e) => setMatchEditForm({...matchEditForm, home_score: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {editingMatch.away_team_data?.name}
+                  </label>
+                  <input
+                    type="number"
+                    value={matchEditForm.away_score}
+                    onChange={(e) => setMatchEditForm({...matchEditForm, away_score: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    min="0"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={matchEditForm.played}
+                    onChange={(e) => setMatchEditForm({...matchEditForm, played: e.target.checked})}
+                    className="rounded border-gray-300 text-emerald-600 shadow-sm focus:border-emerald-300 focus:ring focus:ring-emerald-200 focus:ring-opacity-50"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">
+                    {language === 'ar' ? 'المباراة منتهية' : 'Match terminé'}
+                  </span>
+                </label>
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMatch(null);
+                    setMatchEditForm({ home_score: 0, away_score: 0, played: false });
                   }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800"
                 >
